@@ -41,9 +41,12 @@ export function getSystemPrompt(
     customInstructions?: string | null;
     codeContext?: string | null;
     sporkCode?: boolean;
+    canvas?: boolean;
+    memoryContext?: string;
   } = {}
 ): string {
-  const { agentId, customInstructions, codeContext, sporkCode } = options;
+  const { agentId, customInstructions, codeContext, sporkCode, canvas, memoryContext } =
+    options;
 
   // Agent persona takes priority over everything
   if (agentId) {
@@ -57,6 +60,26 @@ export function getSystemPrompt(
     }
   }
 
+  // Canvas mode
+  if (canvas) {
+    const base = `You are Spork Canvas, an AI that generates rich, interactive artifacts. Always wrap your primary content in an <artifact> tag.
+
+Supported artifact types:
+- <artifact type="html"> — full HTML page rendered live in an iframe
+- <artifact type="markdown"> — formatted document
+- <artifact type="code" lang="javascript"> — code with syntax highlighting (use any language)
+
+Format EXACTLY like this (do NOT use markdown code fences inside artifact tags):
+<artifact type="html">
+<!DOCTYPE html>
+<html>...</html>
+</artifact>
+
+Always include a 1-2 sentence explanation before the artifact. When the user requests changes, output the COMPLETE updated artifact — never partial updates. Default to HTML artifacts unless the user asks for something else.`;
+    if (customInstructions) return `${base}\n\nUser context: ${customInstructions}`;
+    return base;
+  }
+
   // Spork Code mode
   if (sporkCode) {
     const base = codeContext
@@ -66,12 +89,13 @@ export function getSystemPrompt(
     return base;
   }
 
-  // Paid tier — no artificial constraints, just custom instructions if set
+  // Paid tier — no artificial constraints, just custom instructions + memory if set
   if (tier === Tier.SUPER_SPORK) {
-    if (customInstructions) {
-      return `You are Spork, a powerful AI assistant.\n\nUser's custom instructions: ${customInstructions}`;
-    }
-    return "";
+    const parts: string[] = [];
+    if (customInstructions) parts.push(`User's custom instructions: ${customInstructions}`);
+    if (memoryContext) parts.push(`What you know about this user:\n${memoryContext}`);
+    if (parts.length === 0) return "";
+    return `You are Spork, a powerful AI assistant.\n\n${parts.join("\n\n")}`;
   }
 
   // Free tier — constraining system prompt

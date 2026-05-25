@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { UserProfile } from "@clerk/nextjs";
-import { Sparkles, CheckCircle2, Zap, Save } from "lucide-react";
+import { Sparkles, CheckCircle2, Zap, Save, Brain, Trash2 } from "lucide-react";
 import { FREE_DAILY_LIMIT, FREE_MODELS, PAID_MODELS } from "@/lib/models";
 
 interface UserData {
@@ -18,6 +18,8 @@ export default function SettingsPage() {
   const [instructions, setInstructions] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [memories, setMemories] = useState<Array<{ id: string; content: string; createdAt: string }>>([]);
+  const [newMemory, setNewMemory] = useState("");
 
   useEffect(() => {
     fetch("/api/user")
@@ -26,6 +28,11 @@ export default function SettingsPage() {
         setUserData(data);
         setInstructions(data.customInstructions ?? "");
       })
+      .catch(() => {});
+
+    fetch("/api/memory")
+      .then((r) => r.json())
+      .then(setMemories)
       .catch(() => {});
   }, []);
 
@@ -42,6 +49,27 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAddMemory = async () => {
+    if (!newMemory.trim()) return;
+    const res = await fetch("/api/memory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: newMemory }),
+    });
+    const mem = await res.json();
+    setMemories((prev) => [mem, ...prev]);
+    setNewMemory("");
+  };
+
+  const handleDeleteMemory = async (id: string) => {
+    await fetch("/api/memory", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setMemories((prev) => prev.filter((m) => m.id !== id));
   };
 
   const handleUpgrade = async () => {
@@ -174,6 +202,64 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* Memory */}
+      {isSuperSpork && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-1">
+            <Brain size={14} className="text-[#a78bfa]" />
+            <h2 className="text-sm font-semibold text-[#666] uppercase tracking-wider">
+              Spork Memory
+            </h2>
+          </div>
+          <p className="text-xs text-[#555] mb-3">
+            Facts Spork remembers about you. These are injected into every conversation.
+          </p>
+          <div className="flex gap-2 mb-3">
+            <input
+              type="text"
+              value={newMemory}
+              onChange={(e) => setNewMemory(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddMemory();
+                }
+              }}
+              placeholder="I prefer TypeScript over JavaScript..."
+              className="flex-1 bg-[#111] border border-[#2a2a2a] rounded-xl px-3 py-2 text-sm text-[#f0f0f0] placeholder-[#444] outline-none focus:border-[#3a3a3a]"
+            />
+            <button
+              onClick={handleAddMemory}
+              className="px-3 py-2 bg-[#a78bfa]/10 text-[#a78bfa] border border-[#a78bfa]/20 rounded-xl text-sm hover:bg-[#a78bfa]/20 transition-colors"
+            >
+              Add
+            </button>
+          </div>
+          {memories.length === 0 ? (
+            <p className="text-xs text-[#444] text-center py-4">
+              No memories yet. Add facts about yourself.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {memories.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-start justify-between gap-2 bg-[#111] border border-[#2a2a2a] rounded-xl px-3 py-2 group"
+                >
+                  <p className="text-sm text-[#ccc] leading-relaxed">{m.content}</p>
+                  <button
+                    onClick={() => handleDeleteMemory(m.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 shrink-0 text-[#555] hover:text-red-400 transition-all"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Clerk profile */}
       <div>

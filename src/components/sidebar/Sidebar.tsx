@@ -16,6 +16,10 @@ import {
   Bot,
   Rss,
   Search,
+  Paintbrush,
+  Mic,
+  Brain,
+  Store,
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -218,6 +222,57 @@ export function Sidebar() {
         >
           <Bot size={16} />
           {!collapsed && "Agents"}
+        </Link>
+
+        <Link
+          href="/canvas"
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+            pathname === "/canvas"
+              ? "bg-[#1e1e1e] text-white"
+              : "text-[#888] hover:text-white hover:bg-[#1a1a1a]",
+            collapsed && "justify-center px-2"
+          )}
+        >
+          <Paintbrush size={16} />
+          {!collapsed && (
+            <span className="flex items-center gap-1.5">
+              Canvas
+              {!isSuperSpork && (
+                <span className="text-[10px] bg-[#a78bfa]/20 text-[#a78bfa] px-1.5 py-0.5 rounded-full font-medium">
+                  PRO
+                </span>
+              )}
+            </span>
+          )}
+        </Link>
+
+        <Link
+          href="/voice"
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+            pathname === "/voice"
+              ? "bg-[#1e1e1e] text-white"
+              : "text-[#888] hover:text-white hover:bg-[#1a1a1a]",
+            collapsed && "justify-center px-2"
+          )}
+        >
+          <Mic size={16} />
+          {!collapsed && "Voice"}
+        </Link>
+
+        <Link
+          href="/hub"
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+            pathname.startsWith("/hub")
+              ? "bg-[#1e1e1e] text-white"
+              : "text-[#888] hover:text-white hover:bg-[#1a1a1a]",
+            collapsed && "justify-center px-2"
+          )}
+        >
+          <Store size={16} />
+          {!collapsed && "Hub"}
         </Link>
 
         <Link

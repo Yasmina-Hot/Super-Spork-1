@@ -19,6 +19,8 @@ model User {
   openrouterKey      String?
   createdAt          DateTime       @default(now())
   conversations      Conversation[]
+  memories           UserMemory[]
+  savedPrompts       SavedPrompt[]
 }
 
 model Conversation {
@@ -44,6 +46,26 @@ model Message {
   content        String       @db.Text
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model UserMemory {
+  id           String   @id @default(cuid())
+  userId       String
+  content      String   @db.Text
+  sourceConvId String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SavedPrompt {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  content   String   @db.Text
+  isPublic  Boolean  @default(false)
+  uses      Int      @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum Tier {

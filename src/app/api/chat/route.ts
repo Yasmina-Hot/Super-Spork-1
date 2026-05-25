@@ -27,10 +27,11 @@ export async function POST(req: NextRequest) {
     conversationId: string | undefined,
     agentId: string | undefined,
     codeContext: string | undefined,
-    sporkCode: boolean | undefined;
+    sporkCode: boolean | undefined,
+    canvas: boolean | undefined;
 
   try {
-    ({ messages, model, conversationId, agentId, codeContext, sporkCode } =
+    ({ messages, model, conversationId, agentId, codeContext, sporkCode, canvas } =
       await req.json());
   } catch {
     return new Response("Invalid request body", { status: 400 });
@@ -72,11 +73,26 @@ export async function POST(req: NextRequest) {
     return new Response("Internal error", { status: 500 });
   }
 
+  // Fetch memories for Super Spork users to inject into context
+  let memoryContext: string | undefined;
+  if (user.tier === "SUPER_SPORK") {
+    const memories = await db.userMemory.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
+    if (memories.length > 0) {
+      memoryContext = memories.map((m) => `- ${m.content}`).join("\n");
+    }
+  }
+
   const systemContent = getSystemPrompt(user.tier, {
     agentId,
     customInstructions: user.customInstructions,
     codeContext,
     sporkCode,
+    canvas,
+    memoryContext,
   });
 
   const allMessages: CoreMessage[] = systemContent
