@@ -1,0 +1,27 @@
+{
+  "name": "@spork/cli",
+  "version": "0.1.0",
+  "description": "Spork CLI — fast, minimal AI in your terminal",
+  "bin": {
+    "spork": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "marked": "^12.0.0",
+    "marked-terminal": "^7.0.0",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  },
+  "keywords": ["ai", "cli", "spork", "openrouter"],
+  "license": "MIT"
+}
