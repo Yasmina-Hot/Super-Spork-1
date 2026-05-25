@@ -90,4 +90,4 @@ export const ALL_MODELS = [...FREE_MODELS, ...PAID_MODELS];
 export const DEFAULT_FREE_MODEL = FREE_MODELS[0].id;
 export const DEFAULT_PAID_MODEL = PAID_MODELS[0].id;
 
-export const FREE_DAILY_LIMIT = 20;
+export const FREE_DAILY_LIMIT = 4000;

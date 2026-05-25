@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Sparkles,
   Trash2,
+  Bot,
+  Rss,
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -165,6 +167,34 @@ export function Sidebar() {
 
       {/* Bottom Nav */}
       <div className="p-2 border-t border-[#2a2a2a] space-y-0.5">
+        <Link
+          href="/feed"
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+            pathname === "/feed"
+              ? "bg-[#1e1e1e] text-white"
+              : "text-[#888] hover:text-white hover:bg-[#1a1a1a]",
+            collapsed && "justify-center px-2"
+          )}
+        >
+          <Rss size={16} />
+          {!collapsed && "Feed"}
+        </Link>
+
+        <Link
+          href="/agents"
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+            pathname === "/agents"
+              ? "bg-[#1e1e1e] text-white"
+              : "text-[#888] hover:text-white hover:bg-[#1a1a1a]",
+            collapsed && "justify-center px-2"
+          )}
+        >
+          <Bot size={16} />
+          {!collapsed && "Agents"}
+        </Link>
+
         <Link
           href="/code"
           className={cn(

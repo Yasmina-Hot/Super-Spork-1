@@ -10,23 +10,31 @@ import { DEFAULT_PAID_MODEL } from "@/lib/models";
 interface CodeChatProps {
   userTier: "FREE" | "SUPER_SPORK";
   contextCode?: string;
+  isFif?: boolean;
 }
 
-export function CodeChat({ userTier, contextCode }: CodeChatProps) {
+export function CodeChat({ userTier, contextCode, isFif }: CodeChatProps) {
   const [selectedModel, setSelectedModel] = useState(DEFAULT_PAID_MODEL);
 
-  const systemPrompt = contextCode
-    ? `You are Spork Code, an expert coding assistant. The user has shared the following code:\n\`\`\`\n${contextCode}\n\`\`\`\nHelp the user understand, debug, or improve this code.`
-    : "You are Spork Code, an expert coding assistant. Help the user write, debug, and improve their code. Provide clear explanations and working examples.";
+  // System prompt is injected server-side via sporkCode flag + codeContext
+  // We do NOT put messages in body — that would conflict with useChat's own messages array
+  const { messages, input, setInput, append, isLoading, stop } = useChat({
+    api: "/api/chat",
+    body: {
+      model: selectedModel,
+      sporkCode: true,
+      codeContext: contextCode ?? null,
+    },
+  });
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, stop } =
-    useChat({
-      api: "/api/chat",
-      body: {
-        model: selectedModel,
-        messages: [{ role: "system", content: systemPrompt }],
-      },
-    });
+  const handleSend = () => {
+    if (!input.trim() || isLoading) return;
+    const content = isFif
+      ? `FIF — Find, Identify + Fix all bugs in this code:\n\`\`\`\n${contextCode}\n\`\`\``
+      : input;
+    append({ role: "user", content });
+    setInput("");
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -47,15 +55,11 @@ export function CodeChat({ userTier, contextCode }: CodeChatProps) {
 
       <MessageInput
         value={input}
-        onChange={(v) =>
-          handleInputChange({
-            target: { value: v },
-          } as React.ChangeEvent<HTMLTextAreaElement>)
-        }
-        onSubmit={() => handleSubmit(new Event("submit") as never)}
+        onChange={setInput}
+        onSubmit={handleSend}
         onStop={stop}
         isLoading={isLoading}
-        placeholder="Ask about your code..."
+        placeholder={isFif ? "FIF will auto-run on your code..." : "Ask about your code..."}
       />
     </div>
   );

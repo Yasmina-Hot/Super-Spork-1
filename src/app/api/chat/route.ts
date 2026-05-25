@@ -3,17 +3,18 @@ import { streamText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { canUseModel, hasReachedDailyLimit } from "@/lib/tier";
-import { Tier } from "@prisma/client";
+import { canUseModel, hasReachedDailyLimit, getSystemPrompt } from "@/lib/tier";
 
-const openrouter = createOpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY,
-  headers: {
-    "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-    "X-Title": "Spork",
-  },
-});
+function makeOpenRouter(apiKey: string) {
+  return createOpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey,
+    headers: {
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+      "X-Title": "Spork",
+    },
+  });
+}
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -21,7 +22,8 @@ export async function POST(req: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { messages, model, conversationId } = await req.json();
+  const { messages, model, conversationId, agentId, codeContext, sporkCode } =
+    await req.json();
 
   if (!model || !messages?.length) {
     return new Response("Missing required fields", { status: 400 });
@@ -40,52 +42,66 @@ export async function POST(req: NextRequest) {
     return new Response("Daily message limit reached", { status: 429 });
   }
 
+  // Reset daily counter if it's a new day
   const now = new Date();
-  const lastReset = new Date(user.lastReset);
-  const shouldReset =
-    (now.getTime() - lastReset.getTime()) / (1000 * 60 * 60 * 24) >= 1;
+  const today = now.toDateString();
+  const lastResetDay = new Date(user.lastReset).toDateString();
+  const isNewDay = today !== lastResetDay;
 
   await db.user.update({
     where: { id: user.id },
     data: {
-      dailyMessages: shouldReset ? 1 : user.dailyMessages + 1,
-      lastReset: shouldReset ? now : user.lastReset,
+      dailyMessages: isNewDay ? 1 : user.dailyMessages + 1,
+      lastReset: isNewDay ? now : user.lastReset,
     },
   });
 
-  const lastUserMessage = messages[messages.length - 1]?.content as string;
+  // Build system prompt based on tier + agent + context
+  const systemContent = getSystemPrompt(user.tier, {
+    agentId,
+    customInstructions: user.customInstructions,
+    codeContext,
+    sporkCode,
+  });
+
+  // Prepend system message if we have one
+  const allMessages = systemContent
+    ? [{ role: "system" as const, content: systemContent }, ...messages]
+    : messages;
+
+  // Use user's own OpenRouter key if they provided one (BYOK — removes all limits)
+  const apiKey = user.openrouterKey ?? process.env.OPENROUTER_API_KEY ?? "";
+  const openrouter = makeOpenRouter(apiKey);
+
+  // Find last user message for title generation and DB logging
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find((m: { role: string; content: string }) => m.role === "user")
+    ?.content as string | undefined;
 
   if (conversationId && lastUserMessage) {
     await db.message.create({
-      data: {
-        conversationId,
-        role: "user",
-        content: lastUserMessage,
-      },
+      data: { conversationId, role: "user", content: lastUserMessage },
     });
   }
 
   const result = streamText({
     model: openrouter(model),
-    messages,
+    messages: allMessages,
     onFinish: async ({ text }) => {
       if (conversationId && text) {
         await db.message.create({
-          data: {
-            conversationId,
-            role: "assistant",
-            content: text,
-          },
+          data: { conversationId, role: "assistant", content: text },
         });
 
-        const isFirstExchange =
-          messages.length === 1 ||
-          (messages.length === 2 && messages[0].role === "system");
-        if (isFirstExchange) {
-          const title = lastUserMessage.slice(0, 60);
+        // Title from first user message only (no assistant messages yet means first exchange)
+        const existingMessages = await db.message.count({
+          where: { conversationId, role: "assistant" },
+        });
+        if (existingMessages === 1 && lastUserMessage) {
           await db.conversation.update({
             where: { id: conversationId },
-            data: { title },
+            data: { title: lastUserMessage.slice(0, 60) },
           });
         }
       }

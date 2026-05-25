@@ -8,25 +8,32 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  clerkId       String         @unique
-  email         String         @unique
-  tier          Tier           @default(FREE)
-  dailyMessages Int            @default(0)
-  lastReset     DateTime       @default(now())
-  createdAt     DateTime       @default(now())
-  conversations Conversation[]
+  id                 String         @id @default(cuid())
+  clerkId            String         @unique
+  email              String         @unique
+  tier               Tier           @default(FREE)
+  dailyMessages      Int            @default(0)
+  lastReset          DateTime       @default(now())
+  customInstructions String?        @db.Text
+  openrouterKey      String?
+  createdAt          DateTime       @default(now())
+  conversations      Conversation[]
 }
 
 model Conversation {
-  id        String    @id @default(cuid())
-  userId    String
-  title     String    @default("New conversation")
-  model     String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  messages  Message[]
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  userId       String
+  title        String    @default("New conversation")
+  model        String
+  agentId      String?
+  forkedFromId String?
+  isPublic     Boolean   @default(false)
+  views        Int       @default(0)
+  likes        Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  messages     Message[]
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Message {

@@ -26,13 +26,14 @@ export async function POST(req: NextRequest) {
   const user = await db.user.findUnique({ where: { clerkId: userId } });
   if (!user) return new NextResponse("User not found", { status: 404 });
 
-  const { model } = await req.json();
+  const { model, agentId } = await req.json();
 
   const conversation = await db.conversation.create({
     data: {
       userId: user.id,
       model: model ?? "openai/gpt-oss-120b:free",
       title: "New conversation",
+      agentId: agentId ?? null,
     },
   });
 

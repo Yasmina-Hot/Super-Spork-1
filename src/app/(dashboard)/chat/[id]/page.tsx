@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState, useRef } from "react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useChat } from "ai/react";
 import { ModelSelector } from "@/components/chat/ModelSelector";
 import { MessageList } from "@/components/chat/MessageList";
 import { MessageInput } from "@/components/chat/MessageInput";
+import { AgentSelector } from "@/components/agents/AgentSelector";
+import { ForkButton } from "@/components/chat/ForkButton";
 import { DEFAULT_FREE_MODEL } from "@/lib/models";
+import { Sparkles } from "lucide-react";
 import type { Message } from "ai";
 
 interface ConversationData {
   id: string;
   title: string;
   model: string;
+  agentId: string | null;
   messages: Array<{ id: string; role: string; content: string }>;
 }
 
@@ -24,10 +28,14 @@ interface UserData {
 
 export default function ChatPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_FREE_MODEL);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const sentFirstRef = useRef(false);
 
   useEffect(() => {
     Promise.all([
@@ -36,6 +44,7 @@ export default function ChatPage() {
     ])
       .then(([conv, user]: [ConversationData, UserData]) => {
         setSelectedModel(conv.model ?? DEFAULT_FREE_MODEL);
+        setSelectedAgent(conv.agentId ?? null);
         setInitialMessages(
           conv.messages.map((m) => ({
             id: m.id,
@@ -49,12 +58,26 @@ export default function ChatPage() {
       .catch(() => setLoaded(true));
   }, [id]);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, stop } =
-    useChat({
-      api: "/api/chat",
-      body: { model: selectedModel, conversationId: id },
-      initialMessages,
-    });
+  const { messages, input, setInput, append, isLoading, stop } = useChat({
+    api: "/api/chat",
+    body: { model: selectedModel, conversationId: id, agentId: selectedAgent },
+    initialMessages,
+  });
+
+  // Auto-send ?q= first message after conversation loads
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (!q || !loaded || sentFirstRef.current || isLoading) return;
+    sentFirstRef.current = true;
+    router.replace(`/chat/${id}`);
+    append({ role: "user", content: q });
+  }, [loaded, searchParams, id, router, append, isLoading]);
+
+  const handleSend = () => {
+    if (!input.trim() || isLoading) return;
+    append({ role: "user", content: input });
+    setInput("");
+  };
 
   const isAtLimit =
     userData?.tier === "FREE" &&
@@ -71,13 +94,27 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#1e1e1e]">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#1e1e1e]">
         {userData && (
-          <ModelSelector
-            value={selectedModel}
-            onChange={setSelectedModel}
-            userTier={userData.tier}
-          />
+          <>
+            <ModelSelector
+              value={selectedModel}
+              onChange={setSelectedModel}
+              userTier={userData.tier}
+            />
+            <AgentSelector
+              value={selectedAgent}
+              onChange={setSelectedAgent}
+              userTier={userData.tier}
+            />
+            <div className="ml-auto">
+              <ForkButton
+                conversationId={id}
+                userTier={userData.tier}
+                onForked={(newId) => router.push(`/chat/${newId}`)}
+              />
+            </div>
+          </>
         )}
       </div>
 
@@ -95,8 +132,9 @@ export default function ChatPage() {
             </p>
             <a
               href="/settings"
-              className="inline-block px-4 py-2 bg-[#a78bfa] text-white rounded-lg text-sm font-semibold hover:bg-[#9061f9] transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#a78bfa] text-white rounded-lg text-sm font-semibold hover:bg-[#9061f9] transition-colors"
             >
+              <Sparkles size={14} />
               Upgrade to Super Spork
             </a>
           </div>
@@ -104,12 +142,8 @@ export default function ChatPage() {
       ) : (
         <MessageInput
           value={input}
-          onChange={(v) =>
-            handleInputChange({
-              target: { value: v },
-            } as React.ChangeEvent<HTMLTextAreaElement>)
-          }
-          onSubmit={() => handleSubmit(new Event("submit") as never)}
+          onChange={setInput}
+          onSubmit={handleSend}
           onStop={stop}
           isLoading={isLoading}
           disabled={!userData}
