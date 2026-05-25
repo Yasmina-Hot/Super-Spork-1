@@ -45,10 +45,13 @@ export default function ChatPage() {
       .then(([conv, user]: [ConversationData, UserData]) => {
         setSelectedModel(conv.model ?? DEFAULT_FREE_MODEL);
         setSelectedAgent(conv.agentId ?? null);
+        const validRoles = ["user", "assistant", "system", "data"] as const;
         setInitialMessages(
           conv.messages.map((m) => ({
             id: m.id,
-            role: m.role as Message["role"],
+            role: (validRoles.includes(m.role as Message["role"])
+              ? m.role
+              : "user") as Message["role"],
             content: m.content,
           }))
         );

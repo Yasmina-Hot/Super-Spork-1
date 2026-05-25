@@ -12,27 +12,32 @@ export async function GET(req: NextRequest) {
       ? [{ likes: "desc" as const }, { views: "desc" as const }]
       : [{ updatedAt: "desc" as const }];
 
-  const conversations = await db.conversation.findMany({
-    where: { isPublic: true },
-    orderBy,
-    take,
-    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-    select: {
-      id: true,
-      title: true,
-      model: true,
-      agentId: true,
-      likes: true,
-      views: true,
-      updatedAt: true,
-      messages: {
-        take: 1,
-        orderBy: { createdAt: "asc" },
-        select: { content: true, role: true },
+  let conversations;
+  try {
+    conversations = await db.conversation.findMany({
+      where: { isPublic: true },
+      orderBy,
+      take,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      select: {
+        id: true,
+        title: true,
+        model: true,
+        agentId: true,
+        likes: true,
+        views: true,
+        updatedAt: true,
+        messages: {
+          take: 1,
+          orderBy: { createdAt: "asc" },
+          select: { content: true, role: true },
+        },
+        user: { select: { email: true, username: true } },
       },
-      user: { select: { email: true } },
-    },
-  });
+    });
+  } catch {
+    return NextResponse.json({ conversations: [], nextCursor: null });
+  }
 
   const nextCursor =
     conversations.length === take

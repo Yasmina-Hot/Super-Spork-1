@@ -23,21 +23,22 @@ export default async function SharePage({ params }: PageProps) {
     where: { id, isPublic: true },
     include: {
       messages: { orderBy: { createdAt: "asc" } },
-      user: { select: { email: true } },
+      user: { select: { email: true, username: true } },
     },
   });
 
   if (!conversation) notFound();
 
-  // Increment views server-side
-  await db.conversation.update({
+  // Increment views and capture the updated count to avoid a stale +1 display
+  const { views: currentViews } = await db.conversation.update({
     where: { id },
     data: { views: { increment: 1 } },
+    select: { views: true },
   });
 
   const agent = conversation.agentId ? getAgent(conversation.agentId) : null;
   const modelName = getModelName(conversation.model);
-  const authorHandle = conversation.user.email.split("@")[0];
+  const authorHandle = conversation.user.username ?? conversation.user.email.split("@")[0];
 
   return (
     <div className="min-h-full bg-[#0a0a0a] text-[#f0f0f0]">
@@ -50,7 +51,7 @@ export default async function SharePage({ params }: PageProps) {
           <div className="flex items-center gap-3 text-xs text-[#555]">
             <span className="flex items-center gap-1">
               <Eye size={10} />
-              {conversation.views + 1}
+              {currentViews}
             </span>
             <span className="flex items-center gap-1">
               <Heart size={10} />

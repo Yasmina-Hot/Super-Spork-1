@@ -18,7 +18,7 @@ interface FeedConversation {
   views: number;
   updatedAt: string;
   messages: Array<{ content: string; role: string }>;
-  user: { email: string };
+  user: { email: string; username: string | null };
 }
 
 function getModelName(modelId: string): string {
@@ -49,10 +49,13 @@ export default function FeedPage() {
   }, [filter, loadFeed]);
 
   const handleLike = async (id: string) => {
-    await fetch(`/api/conversations/${id}/like`, { method: "POST" });
-    setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, likes: c.likes + 1 } : c))
-    );
+    try {
+      const res = await fetch(`/api/conversations/${id}/like`, { method: "POST" });
+      if (!res.ok) return;
+      setConversations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, likes: c.likes + 1 } : c))
+      );
+    } catch {}
   };
 
   return (
@@ -94,7 +97,7 @@ export default function FeedPage() {
             const agent = conv.agentId ? getAgent(conv.agentId) : null;
             const firstMessage = conv.messages[0];
             const modelName = getModelName(conv.model);
-            const authorHandle = conv.user.email.split("@")[0];
+            const authorHandle = conv.user.username ?? conv.user.email.split("@")[0];
 
             return (
               <Link

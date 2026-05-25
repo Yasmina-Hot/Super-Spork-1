@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { streamText } from "ai";
+import { streamText, type CoreMessage } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
@@ -22,41 +22,56 @@ export async function POST(req: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { messages, model, conversationId, agentId, codeContext, sporkCode } =
-    await req.json();
+  let messages: Array<{ role: string; content: string }>,
+    model: string,
+    conversationId: string | undefined,
+    agentId: string | undefined,
+    codeContext: string | undefined,
+    sporkCode: boolean | undefined;
+
+  try {
+    ({ messages, model, conversationId, agentId, codeContext, sporkCode } =
+      await req.json());
+  } catch {
+    return new Response("Invalid request body", { status: 400 });
+  }
 
   if (!model || !messages?.length) {
     return new Response("Missing required fields", { status: 400 });
   }
 
-  const user = await db.user.findUnique({ where: { clerkId: userId } });
-  if (!user) {
-    return new Response("User not found", { status: 404 });
+  // Atomic: check limit + increment inside transaction to prevent race condition
+  let user;
+  try {
+    user = await db.$transaction(async (tx) => {
+      const u = await tx.user.findUnique({ where: { clerkId: userId } });
+      if (!u) throw new Error("user_not_found");
+      if (!canUseModel(u.tier, model)) throw new Error("model_forbidden");
+      if (hasReachedDailyLimit(u.tier, u.dailyMessages, u.lastReset))
+        throw new Error("limit_reached");
+
+      const now = new Date();
+      const isNewDay =
+        now.toDateString() !== new Date(u.lastReset).toDateString();
+
+      return tx.user.update({
+        where: { id: u.id },
+        data: {
+          dailyMessages: isNewDay ? 1 : { increment: 1 },
+          lastReset: isNewDay ? now : u.lastReset,
+        },
+      });
+    });
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg === "user_not_found") return new Response("User not found", { status: 404 });
+    if (msg === "model_forbidden")
+      return new Response("Model requires Super Spork upgrade", { status: 403 });
+    if (msg === "limit_reached")
+      return new Response("Daily message limit reached", { status: 429 });
+    return new Response("Internal error", { status: 500 });
   }
 
-  if (!canUseModel(user.tier, model)) {
-    return new Response("Model requires Super Spork upgrade", { status: 403 });
-  }
-
-  if (hasReachedDailyLimit(user.tier, user.dailyMessages, user.lastReset)) {
-    return new Response("Daily message limit reached", { status: 429 });
-  }
-
-  // Reset daily counter if it's a new day
-  const now = new Date();
-  const today = now.toDateString();
-  const lastResetDay = new Date(user.lastReset).toDateString();
-  const isNewDay = today !== lastResetDay;
-
-  await db.user.update({
-    where: { id: user.id },
-    data: {
-      dailyMessages: isNewDay ? 1 : user.dailyMessages + 1,
-      lastReset: isNewDay ? now : user.lastReset,
-    },
-  });
-
-  // Build system prompt based on tier + agent + context
   const systemContent = getSystemPrompt(user.tier, {
     agentId,
     customInstructions: user.customInstructions,
@@ -64,20 +79,16 @@ export async function POST(req: NextRequest) {
     sporkCode,
   });
 
-  // Prepend system message if we have one
-  const allMessages = systemContent
-    ? [{ role: "system" as const, content: systemContent }, ...messages]
-    : messages;
+  const allMessages: CoreMessage[] = systemContent
+    ? [{ role: "system", content: systemContent }, ...(messages as CoreMessage[])]
+    : (messages as CoreMessage[]);
 
-  // Use user's own OpenRouter key if they provided one (BYOK — removes all limits)
   const apiKey = user.openrouterKey ?? process.env.OPENROUTER_API_KEY ?? "";
   const openrouter = makeOpenRouter(apiKey);
 
-  // Find last user message for title generation and DB logging
   const lastUserMessage = [...messages]
     .reverse()
-    .find((m: { role: string; content: string }) => m.role === "user")
-    ?.content as string | undefined;
+    .find((m) => m.role === "user")?.content;
 
   if (conversationId && lastUserMessage) {
     await db.message.create({
@@ -85,28 +96,32 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const result = streamText({
-    model: openrouter(model),
-    messages: allMessages,
-    onFinish: async ({ text }) => {
-      if (conversationId && text) {
-        await db.message.create({
-          data: { conversationId, role: "assistant", content: text },
-        });
-
-        // Title from first user message only (no assistant messages yet means first exchange)
-        const existingMessages = await db.message.count({
-          where: { conversationId, role: "assistant" },
-        });
-        if (existingMessages === 1 && lastUserMessage) {
-          await db.conversation.update({
-            where: { id: conversationId },
-            data: { title: lastUserMessage.slice(0, 60) },
+  try {
+    const result = streamText({
+      model: openrouter(model),
+      messages: allMessages,
+      onFinish: async ({ text }) => {
+        if (conversationId && text) {
+          await db.message.create({
+            data: { conversationId, role: "assistant", content: text },
           });
-        }
-      }
-    },
-  });
 
-  return result.toDataStreamResponse();
+          const existingMessages = await db.message.count({
+            where: { conversationId, role: "assistant" },
+          });
+          if (existingMessages === 1 && lastUserMessage) {
+            await db.conversation.update({
+              where: { id: conversationId },
+              data: { title: lastUserMessage.slice(0, 60) },
+            });
+          }
+        }
+      },
+    });
+
+    return result.toDataStreamResponse();
+  } catch (e) {
+    console.error("OpenRouter error:", e);
+    return new Response("AI service error", { status: 502 });
+  }
 }

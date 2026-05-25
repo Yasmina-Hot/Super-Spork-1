@@ -8,7 +8,10 @@ export async function POST(req: NextRequest) {
   if (!userId) return new NextResponse("Unauthorized", { status: 401 });
 
   const { conversationId, newModel } = await req.json();
-  if (!conversationId || !newModel) {
+  if (
+    typeof conversationId !== "string" || !conversationId.trim() ||
+    typeof newModel !== "string" || !newModel.trim()
+  ) {
     return new NextResponse("Missing fields", { status: 400 });
   }
 

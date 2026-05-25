@@ -11,10 +11,8 @@ export async function GET() {
   if (!user) return new NextResponse("User not found", { status: 404 });
 
   const now = new Date();
-  const lastReset = new Date(user.lastReset);
-  const daysSinceReset =
-    (now.getTime() - lastReset.getTime()) / (1000 * 60 * 60 * 24);
-  const effectiveDailyMessages = daysSinceReset >= 1 ? 0 : user.dailyMessages;
+  const isNewDay = now.toDateString() !== new Date(user.lastReset).toDateString();
+  const effectiveDailyMessages = isNewDay ? 0 : user.dailyMessages;
 
   return NextResponse.json({
     tier: user.tier,
