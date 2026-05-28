@@ -4,6 +4,18 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { canUseModel, hasReachedDailyLimit, getSystemPrompt } from "@/lib/tier";
+import { BERRY_MODEL, BERRY_PRIMARY_MODEL, BERRY_FALLBACK_MODEL } from "@/lib/models";
+import { getAgent } from "@/lib/agents";
+
+// Resolve Berry-alpha1937 virtual model to its actual OpenRouter backend
+function resolveModel(model: string, agentId?: string): string {
+  if (model === BERRY_MODEL.id) {
+    // If the Berry agent is selected, use the primary Nemotron model
+    // Fall back to GPT-4.1 if Nemotron is unavailable (handled at request level)
+    return agentId === "berry" ? BERRY_PRIMARY_MODEL : BERRY_FALLBACK_MODEL;
+  }
+  return model;
+}
 
 function makeOpenRouter(apiKey: string) {
   return createOpenAI({
@@ -37,7 +49,7 @@ export async function POST(req: NextRequest) {
     return new Response("Invalid request body", { status: 400 });
   }
 
-  if (!model || !messages?.length) {
+  if (!model || !Array.isArray(messages) || messages.length === 0) {
     return new Response("Missing required fields", { status: 400 });
   }
 
@@ -105,6 +117,9 @@ export async function POST(req: NextRequest) {
   }
   const openrouter = makeOpenRouter(apiKey);
 
+  // Resolve Berry virtual model to actual OpenRouter backend
+  const resolvedModel = resolveModel(model, agentId);
+
   const lastUserMessage = [...messages]
     .reverse()
     .find((m) => m.role === "user")?.content;
@@ -117,7 +132,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = streamText({
-      model: openrouter(model),
+      model: openrouter(resolvedModel),
       messages: allMessages,
       onFinish: async ({ text }) => {
         if (conversationId && text) {
