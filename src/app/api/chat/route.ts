@@ -125,12 +125,10 @@ export async function POST(req: NextRequest) {
             data: { conversationId, role: "assistant", content: text },
           });
 
-          const existingMessages = await db.message.count({
-            where: { conversationId, role: "assistant" },
-          });
-          if (existingMessages === 1 && lastUserMessage) {
-            await db.conversation.update({
-              where: { id: conversationId },
+          // Atomic sentinel update prevents title race condition (Bug 7)
+          if (lastUserMessage) {
+            await db.conversation.updateMany({
+              where: { id: conversationId, title: "New conversation" },
               data: { title: lastUserMessage.slice(0, 60) },
             });
           }

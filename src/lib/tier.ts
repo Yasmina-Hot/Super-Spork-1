@@ -88,6 +88,15 @@ export function canUseMemoryAutoExtract(tier: Tier): boolean {
   return atLeast(tier, Tier.SPORK_PRO);
 }
 
+// Convenience shorthands used by TTS/STT routes
+export function atLeastPro(tier: Tier): boolean {
+  return atLeast(tier, Tier.SPORK_PRO);
+}
+
+export function atLeastSuperSpork(tier: Tier): boolean {
+  return atLeast(tier, Tier.SUPER_SPORK);
+}
+
 export function getMemoryLimit(tier: Tier): number | null {
   if (atLeast(tier, Tier.SPORK_INFINITY)) return null; // unlimited
   if (atLeast(tier, Tier.SPORK_ULTRA)) return 1000;
