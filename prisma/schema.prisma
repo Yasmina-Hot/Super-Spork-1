@@ -8,35 +8,45 @@ datasource db {
 }
 
 model User {
-  id                 String         @id @default(cuid())
-  clerkId            String         @unique
-  email              String         @unique
+  id                 String             @id @default(cuid())
+  clerkId            String             @unique
+  email              String             @unique
   username           String?
-  tier               Tier           @default(FREE)
-  dailyMessages      Int            @default(0)
-  lastReset          DateTime       @default(now())
-  customInstructions String?        @db.Text
+  tier               Tier               @default(FREE)
+  dailyMessages      Int                @default(0)
+  lastReset          DateTime           @default(now())
+  customInstructions String?            @db.Text
   openrouterKey      String?
-  createdAt          DateTime       @default(now())
+  createdAt          DateTime           @default(now())
   conversations      Conversation[]
   memories           UserMemory[]
   savedPrompts       SavedPrompt[]
+  apiTokens          ApiToken[]
+  conversationLikes  ConversationLike[]
+  folders            Folder[]
+  snippets           Snippet[]
+  customAgents       CustomAgent[]
+  arenaVotes         ArenaVote[]
 }
 
 model Conversation {
-  id           String    @id @default(cuid())
+  id           String             @id @default(cuid())
   userId       String
-  title        String    @default("New conversation")
+  title        String             @default("New conversation")
   model        String
   agentId      String?
   forkedFromId String?
-  isPublic     Boolean   @default(false)
-  views        Int       @default(0)
-  likes        Int       @default(0)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  isPublic     Boolean            @default(false)
+  views        Int                @default(0)
+  likes        Int                @default(0)
+  pinnedAt     DateTime?
+  folderId     String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
   messages     Message[]
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder       Folder?            @relation(fields: [folderId], references: [id])
+  conversationLikes ConversationLike[]
 }
 
 model Message {
@@ -44,6 +54,7 @@ model Message {
   conversationId String
   role           Role
   content        String       @db.Text
+  pinned         Boolean      @default(false)
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
@@ -64,13 +75,85 @@ model SavedPrompt {
   content   String   @db.Text
   isPublic  Boolean  @default(false)
   uses      Int      @default(0)
+  agentId   String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ConversationLike {
+  userId         String
+  conversationId String
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, conversationId])
+}
+
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String
+  label      String
+  tokenHash  String    @unique
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Folder {
+  id            String         @id @default(cuid())
+  userId        String
+  name          String
+  emoji         String?
+  createdAt     DateTime       @default(now())
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+}
+
+model Snippet {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  content   String   @db.Text
+  lang      String?
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CustomAgent {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  tagline      String?
+  emoji        String?
+  accentColor  String?
+  systemPrompt String   @db.Text
+  isPublic     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ArenaVote {
+  id        String   @id @default(cuid())
+  userId    String
+  winnerId  String
+  loserId   String
+  prompt    String   @db.Text
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum Tier {
   FREE
+  SPORK_LITE
+  SPORK_PRO
   SUPER_SPORK
+  SPORK_ULTRA
+  SPORK_INFINITY
+  SPORK_GODMODE
 }
 
 enum Role {
